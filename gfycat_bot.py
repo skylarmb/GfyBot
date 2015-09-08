@@ -25,7 +25,8 @@ def process_sub(reddit,subreddit_name):
 		title = submission.title
 		url = vars(submission)['url']
 		permalink = vars(submission)['permalink']
-		print(pprint.pprint(vars(submission))) if debug
+		if debug:
+			print(pprint.pprint(vars(submission)))
 		extension = url[len(url)-3:]
 		#if the post is a gif, lets process it
 		if(extension == "gif"):
@@ -39,7 +40,8 @@ def process_sub(reddit,subreddit_name):
 				print("Processed: " + title + "\nPermalink: " + permalink)
 			except Exception as e:
 				print(post_id + ": Error while uploading this post, skipping to the next post...")
-				traceback.print_exc() if debug
+				if debug:
+					traceback.print_exc()
 				continue
 		else:
 			print(post_id + ": is not a GIF")
@@ -47,7 +49,8 @@ def process_sub(reddit,subreddit_name):
 		time.sleep(5)
 
 def create_comment(upload):
-	print(upload.formated()) if debug
+	if debug:
+		print(upload.formated()) 
 	gifv = "http://gfycat.com/" + upload.get("gfyName")
 	gif_size_formatted = upload.get("gifSize") / 1000000.0
 	gfy_size_formatted = upload.get("gfysize") / 1000000.0
