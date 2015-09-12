@@ -6,23 +6,32 @@ import gfycat.gfycat
 import traceback
 import time
 from datetime import datetime
+from prawoauth2 import PrawOAuth2Mini
+import settings as s
 
-debug = False
+debug = s.debug
+
+#Set up global reddit auth
+reddit = praw.Reddit(user_agent = s.user_agent)
+oauth_helper = PrawOAuth2Mini(reddit, app_key=s.app_key,
+                      app_secret=s.app_secret,
+                      access_token=s.access_token,
+                      refresh_token=s.refresh_token, scopes=s.scopes)
 
 def process_sub(reddit,subreddit_name):
+	print(str(datetime.now()))
 	print("Now running on: " + subreddit_name)
 	#may need to be adjusted for subreddits with more postings per minute
-	submission_generator = reddit.get_subreddit(subreddit_name).get_new(limit=5)
+	submission_generator = reddit.get_subreddit(subreddit_name).get_new(limit=s.number_of_posts)
 	for submission in submission_generator:
 		post_id = vars(submission)['id']
 		#file for keeping track of already processed links
-		processed_file = open("processed.txt")
+		processed_file = open(s.processed_file)
 		#TODO: dont keep post IDs on file forever, maybe only the last 50?	
 		if post_id in processed_file.read():
 			print(post_id + ": Already processed")
 			processed_file.close()
 			continue
-		title = submission.title
 		url = vars(submission)['url']
 		permalink = vars(submission)['permalink']
 		if debug:
@@ -35,18 +44,18 @@ def process_sub(reddit,subreddit_name):
 				upload = gfycat.gfycat.gfycat().upload(url)
 				submission.add_comment(create_comment(upload))
 				#successfully processed post, add ID to file
-				with open("processed.txt", "a") as processed:
+				with open(s.processed_file, "a") as processed:
 					processed.write(post_id + "\n")
-				print("Processed: " + title + "\nPermalink: " + permalink)
+				print("Processed: " + post_id + "\nPermalink: " + permalink)
 			except Exception as e:
-				print(post_id + ": Error while uploading this post, skipping to the next post...")
+				print(post_id + ": Error, skipping...")
 				if debug:
 					traceback.print_exc()
 				continue
 		else:
 			print(post_id + ": is not a GIF")
 			continue
-		time.sleep(5)
+		time.sleep(s.sleep_time)
 
 def create_comment(upload):
 	if debug:
@@ -69,21 +78,18 @@ def create_comment(upload):
 		bandwidth = ("Bandwidth saved: %dkb" % (gif_size_formatted*1000 - gfy_size_formatted*1000))
 	else:
 		bandwidth = ("Bandwidth saved: %.2fmb" % (gif_size_formatted - gfy_size_formatted))
-	return 'Here is a blazing fast gfycat version! ' + gifv + '\n\n' + original_size + '\n\n' +  new_size + '\n\n' + bandwidth + '\n\n____________________\n\nI am a bot. If I am misbehaving, please [message /u/QAFY](http://www.reddit.com/message/compose/?to=skylarmmb)'
+	return 'Here is a blazing fast gfycat version! ' + gifv + '\n\n' + original_size + '\n\n' +  new_size + '\n\n' + bandwidth + '\n\n____________________\n\n' + s.usermessage
 
 def mainloop():
-	print("~~~~ gfy__bot ~~~~")
 	try:
-		user_agent = ("#YOUR USER AGENT HERE#")
-		reddit = praw.Reddit(user_agent = user_agent)
-		reddit.login('#BOT USERNAME#','#BOT PASSWORD#')
-		subreddits = ['#PUT SUBREDDITS#','#IN THIS ARRAY#','#FOR EXAMPLE#','gifs']
+		subreddits = s.subreddits
 		for sub in subreddits:
 			process_sub(reddit,sub)
 		print("Done!")
-	except Exception as e:
-		print("Error at the login level (check network connection and that reddit isn't down).")
-		traceback.print_exc()
+	except praw.errors.OAuthInvalidToken:
+		print("Error at the login level, refreshing tokens.")
+		oauth_helper.refresh()
+		mainloop()
 		
 mainloop()
 
