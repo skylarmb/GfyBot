@@ -9,6 +9,7 @@ from datetime import datetime
 from prawoauth2 import PrawOAuth2Mini
 import settings as s
 
+nothing_to_do = True
 debug = s.debug
 
 #Set up global reddit auth
@@ -19,17 +20,19 @@ oauth_helper = PrawOAuth2Mini(reddit, app_key=s.app_key,
                       refresh_token=s.refresh_token, scopes=s.scopes)
 
 def process_sub(reddit,subreddit_name):
-	print(str(datetime.now()))
-	print("Now running on: " + subreddit_name)
-	#may need to be adjusted for subreddits with more postings per minute
+	global nothing_to_do
+	if debug:
+		print("Now running on: " + subreddit_name)
+	#number_of_posts needs to be adjusted for subreddits with more postings per minute. Do so in settings.py
 	submission_generator = reddit.get_subreddit(subreddit_name).get_new(limit=s.number_of_posts)
 	for submission in submission_generator:
 		post_id = vars(submission)['id']
-		#file for keeping track of already processed links
+		#file for keeping track of already processed links. Set in settings.py
 		processed_file = open(s.processed_file)
 		#TODO: dont keep post IDs on file forever, maybe only the last 50?	
 		if post_id in processed_file.read():
-			print(post_id + ": Already processed")
+			if debug:
+				print(post_id + ": Already processed")
 			processed_file.close()
 			continue
 		url = vars(submission)['url']
@@ -46,14 +49,16 @@ def process_sub(reddit,subreddit_name):
 				#successfully processed post, add ID to file
 				with open(s.processed_file, "a") as processed:
 					processed.write(post_id + "\n")
-				print("Processed: " + post_id + "\nPermalink: " + permalink)
+				print(prefix() + "Processed: " + post_id + " on " + subreddit_name)
+				nothing_to_do = False
 			except Exception as e:
-				print(post_id + ": Error, skipping...")
+				print(prefix() + post_id + ": Error, skipping...")
 				if debug:
 					traceback.print_exc()
 				continue
 		else:
-			print(post_id + ": is not a GIF")
+			if debug:
+				print(post_id + ": is not a GIF")
 			continue
 		time.sleep(s.sleep_time)
 
@@ -80,14 +85,23 @@ def create_comment(upload):
 		bandwidth = ("Bandwidth saved: %.2fmb" % (gif_size_formatted - gfy_size_formatted))
 	return 'Here is a blazing fast gfycat version! ' + gifv + '\n\n' + original_size + '\n\n' +  new_size + '\n\n' + bandwidth + '\n\n____________________\n\n' + s.usermessage
 
+def prefix():
+	return str(datetime.now()).split(".")[0] + " | "
+
 def mainloop():
+	global nothing_to_do
+	nothing_to_do = True
 	try:
 		subreddits = s.subreddits
 		for sub in subreddits:
 			process_sub(reddit,sub)
-		print("Done!")
+		if(nothing_to_do):
+			print(prefix() + "Nothing to do")
+		else:
+			print(prefix() + "Completed successfully")
 	except praw.errors.OAuthInvalidToken:
-		print("Error at the login level, refreshing tokens.")
+		print(prefix() + "Error at the login level, refreshing tokens.")
+		print()
 		oauth_helper.refresh()
 		mainloop()
 		
